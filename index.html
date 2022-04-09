@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Stock simulation test</title>
+		<meta name="viewport" content="width=device-width,initial-scale=1">
+		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+		<script>
+			helpers = {
+				sign: () => (Math.round(Math.random()) * 2 - 1),
+			}
+
+			news = {
+				basic: () => (helpers.sign() * Math.random() * 0.1),
+				infrequent: () => {
+					const r = Math.random()
+					if (r < 0.89) return 0
+					const s = helpers.sign()
+					if (r < 0.96) return s * Math.random() * (s == 1 ? 0.2 : 0.1)
+					return s * Math.pow(Math.random(), (s == 1 ? 5 : 7))
+				},
+				crazy: () => {
+					const s = helpers.sign()
+					return s * Math.pow(Math.random(), (s == 1 ? 1.5 : 2)) * 0.5
+				},
+				realistic: () => {
+					const r = Math.random()
+					let result
+					if (Math.random() < 0.5) result = -0.1 * Math.pow(r, 3.5) - 0.4 * Math.pow(r, 10000)
+					else result = 0.1 * Math.pow(r, 3) + 1.9 * Math.pow(r, 10000)
+					if (Math.abs(result) < 0.03) return 0
+					return result
+				},
+			}
+
+			iterate = (news, price, pressure) => {
+				const initialPrice = price
+				pressure += price * news
+				const rawPrice = price + pressure * 0.8
+				pressure -= rawPrice - price
+				const s = helpers.sign()
+				const noise = s * Math.pow(Math.random(), (s == 1 ? 0.4 : 0.5))
+				price = rawPrice + noise * Math.max(Math.abs(rawPrice - price) * 0.2, rawPrice * 0.02)
+				pressure -= price - rawPrice
+				pressure *= price / initialPrice
+				return { price, rawPrice, news: initialPrice * news, pressure }
+			}
+
+			generate = (newsFunction) => {
+				if ("destroy" in chart) chart.destroy()
+				const daysCount = 1000
+				let days = { price: [], rawPrice: [], absNews: [], absPressure: [] }
+				let price = Math.random() * 100
+				let pressure = 0
+				for (let i = 0; i < daysCount; i++) {
+					const results = iterate(newsFunction(), price, pressure)
+					price = results.price
+					pressure = results.pressure
+					days.price.push(results.price)
+					days.rawPrice.push(results.rawPrice)
+					days.absNews.push(Math.abs(results.news))
+					days.absPressure.push(Math.abs(results.pressure))
+				}
+				const data = {
+					labels: Array.from(new Array(daysCount), (v, i) => i),
+					datasets: [
+						{ label: "Price", backgroundColor: "#000000", borderColor: "#000000", data: days.price },
+						{ label: "Raw price (before adding noise)", backgroundColor: "#ffff00", borderColor: "#ffff00", data: days.rawPrice },
+						{ label: "Absolute value of pressure (after adding noise)", backgroundColor: "#ff00ff", borderColor: "#ff00ff", data: days.absPressure },
+						{ label: "Absolute value of news", backgroundColor: "#00ff00", borderColor: "#00ff00", data: days.absNews },
+					],
+				}
+				const config = {
+					type: "line",
+					data,
+					options: { scales: { y: { min: 0 } }, animation: false, spanGaps: true, elements: { point: { radius: 0 } } },
+				}
+				chart = new Chart(document.getElementById("chart"), config)
+			}
+		</script>
+	</head>
+	<body>
+		<div>
+			<h1>Generate new</h1>
+			<button onclick="generate(news.basic)">Basic news</button>
+			<button onclick="generate(news.infrequent)">Infrequent news</button>
+			<button onclick="generate(news.crazy)">Crazy news</button>
+			<button onclick="generate(news.realistic)">Realistic news</button>
+		</div>
+		<div>
+			<h1>Chart</h1>
+			<canvas id="chart"></canvas>
+		</div>
+	</body>
+</html>
