@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Game test</title>
+		<meta name="viewport" content="width=device-width,initial-scale=1">
+		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+		<script src="../simulation.js"></script>
+		<script src="../data.js"></script>
+		<script src="game.js"></script>
+		<link rel="stylesheet" href="../lib/normalize.css">
+		<link rel="stylesheet" href="../lib/skeleton.css">
+		<link rel="stylesheet" href="style.css">
+	</head>
+	<body>
+		<div class="row">
+			<div class="eight columns">
+				<div id="controlsContainer">
+					<button onclick="game.restart()" class="button-primary">(Re)start</button>
+					<button onclick="game.transact(1)">Buy 1</button>
+					<button onclick="game.transact(10)">Buy 10</button>
+					<button onclick="game.transact(-1)">Sell 1</button>
+					<button onclick="game.transact(-10)">Sell 10</button>
+					<button onclick="game.close()">Close position</button>
+					<select id="companies"></select>
+				</div>
+				<div id="chartContainer">
+					<canvas id="chart"></canvas>
+				</div>
+			</div>
+			<div class="four columns" id="infoContainer">
+				<div>
+					<table class="u-full-width">
+						<thead>
+							<th>Total</th>
+							<th></th>
+							<th id="portfolioTotal">$0</th>
+						</thead>
+						<tbody id="portfolio"></tbody>
+					</table>
+				</div>
+				<div id="news">
+					<p>NEWS headlines will appear here</p>
+				</div>
+			</div>
+		</div>
+	</body>
+</html>

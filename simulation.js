@@ -48,6 +48,10 @@ class Generator {
 		this.newsHistory = [ null ]
 	}
 
+	getHistoryLength() {
+		return this.newsHistory.length
+	}
+
 	getLastPrices() {
 		return this.data.companies.map((name, index) => (this.companyProperties[index].priceHistory.at(-1)))
 	}

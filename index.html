@@ -2,60 +2,17 @@
 <html>
 	<head>
 		<meta charset="utf-8">
-		<title>Stock simulation test</title>
+		<title>Trading Simulator 2022</title>
 		<meta name="viewport" content="width=device-width,initial-scale=1">
-		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-		<script src="simulation.js"></script>
-		<script src="data.js"></script>
-		<script>
-			output = (daysCount = 1000) => {
-				if ("destroy" in chart) chart.destroy()
-				document.getElementById("news").innerHTML = ""
-				const g = new Generator(testData, 0.2, true)
-				const results = Array.from(new Array(daysCount), (value, index) => (g.next()))
-				const config = {
-					type: "line",
-					data: {
-						labels: Array.from(new Array(daysCount), (value, index) => index),
-						datasets: testData.companies.map((name, index) => ({
-							label: name,
-							borderColor: helpers.color(index / testData.companies.length),
-							data: g.getPriceHistory(index),
-						})),
-					},
-					options: {
-						scales: { y: { min: 0 } },
-						animation: false,
-						spanGaps: true,
-						elements: { point: { radius: 0 } },
-					},
-				}
-				chart = new Chart(document.getElementById("chart"), config)
-				for (let i = 0; i < daysCount; i++) {
-					const newsP = document.createElement("p")
-					const n = results[i].news
-					if (!n) newsP.innerHTML = "(" + i + ") --"
-					else newsP.innerHTML = "(" + i + ") " + n[0] + "," + n[1] + " " + testData.events[n[0]].names[n[1]]
-					document.getElementById("news").appendChild(newsP)
-				}
-			}
-		</script>
+		<link rel="stylesheet" href="lib/normalize.css">
+		<link rel="stylesheet" href="lib/skeleton.css">
 	</head>
 	<body>
-		<div>
-			<h1>Generate new</h1>
-			<button onclick="output(100)">100 days</button>
-			<button onclick="output(365)">365 days</button>
-			<button onclick="output(1000)">1000 days</button>
-			<button onclick="output(2000)">2000 days</button>
-		</div>
-		<div>
-			<h1>Chart</h1>
-			<canvas id="chart"></canvas>
-		</div>
-		<div>
-			<h1>News</h1>
-			<div id="news"></div>
+		<div class="container">
+			<h1>Welcome!</h1>
+			<p>Please note that these might only work on desktop screens.</p>
+			<p><a href="./game-test/">Game test</a></p>
+			<p><a href="./stock-simulation-test/">Stock simulation test</a></p>
 		</div>
 	</body>
 </html>
