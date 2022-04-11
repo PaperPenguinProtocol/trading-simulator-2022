@@ -1,14 +1,21 @@
 helpers = {
 	sign: () => (Math.round(Math.random()) * 2 - 1),
-	color: (fraction) => {
-		const width = 0.3
-		const other = (fraction < width ? fraction + 1 : fraction - 1)
-		const o = (l, f) => (Math.min(f + width, l + 1/3) - Math.max(f - width, l))
-		const overlap = (l) => (255 * 3 * Math.max(0, Math.max(o(l, fraction), o(l, other))))
-		return "rgb(" + Math.round(overlap(0)) + ", " + Math.round(overlap(1/3)) + ", " + Math.round(overlap(2/3)) + ")"
-	},
 	remove: (arr, value) => {
 		arr.splice(arr.indexOf(value), 1)
+	},
+	pad: (integer, count) => ("0".repeat(count - integer.toString().length) + integer),
+	format: (amount) => {
+		const sign = (amount < 0 ? "-" : "")
+		amount = Math.round(Math.abs(amount) * 100) / 100
+		let whole = Math.floor(amount)
+		let string = "." + helpers.pad(Math.round((amount - whole) * 100), 2)
+		if (whole == 0) return sign + "0" + string
+		while (whole > 0) {
+			nextWhole = Math.floor(whole / 1000)
+			string = " " + (nextWhole > 0 ? helpers.pad(whole % 1000, 3) : whole % 1000) + string
+			whole = nextWhole
+		}
+		return sign + string.slice(1)
 	},
 }
 
@@ -42,6 +49,10 @@ class Generator {
 			details: {
 				sectors: [ "gaming" ],
 				employeesCount: Math.floor(Math.pow(Math.random(), 5) * 10000) + 10,
+				cash: Math.random() * 100000 + 1000,
+				cashSinceReport: 0,
+				report: null,
+				revenueSources: [ Math.random() * 10 + 1 ],
 			},
 		}))
 		this.chains = this.data.events.map((chain) => (new Markov(chain.transitions, 0)))
@@ -66,7 +77,7 @@ class Generator {
 
 	#applyNews(i) {
 		const n = this.getLastNews()
-		if (!n) return 0
+		if (!n || n[0] == -1) return 0
 		const d = this.companyProperties[i].details
 		const c = this.data.events[n[0]].consequences[n[1]]
 		let newsC = 0
@@ -86,6 +97,45 @@ class Generator {
 		return newsC
 	}
 
+	#createPressRelease(i) {
+		const d = this.companyProperties[i].details
+		const name = this.data.companies[i]
+		if (Math.random() < 0.2) {
+			const assetsChange = d.cash / (d.cash - d.cashSinceReport)
+			d.report = assetsChange
+			d.cashSinceReport = 0
+			return "Company " + name + " releases earnings report: " + helpers.format(assetsChange - 1) + " since last report"
+		}
+		if (Math.pow(Math.random(), Math.log10(d.employeesCount)) < 0.01) {
+			const revenue = Math.pow(Math.random(), 3) * 100 + 10
+			d.revenueSources.push(revenue)
+			return "Company " + name + " releases new " + (revenue < 0.3 ? "minor" : "major") + " product"
+		}
+		if (Math.random() < 0.95) {
+			if (d.sectors.includes("retail")) {
+				helpers.remove(d.sectors, "retail")
+				return "Company " + name + " exits retail sector"
+			}
+			d.sectors.push("retail")
+			return "Company " + name + " enters retail sector"
+		}
+		return "Company " + name + " may or may not be a good investment, analyst says"
+	}
+
+	#nextFundamentals(i) {
+		const p = this.companyProperties[i]
+		const d = this.companyProperties[i].details
+		if (d.report !== null) {
+			p.pressure += (d.report > 0 ? d.report * 0.5 : - 1 - 0.5 / d.report)
+			d.report = null
+		}
+		const cashChange = d.revenueSources.reduce((prevValue, curValue) => (
+			prevValue + curValue * (Math.random() * 0.5 - 0.2)
+		), 0)
+		d.cash += cashChange
+		d.cashSinceReport += cashChange
+	}
+
 	#nextTechnicals(i, newsC) {
 		const p = this.companyProperties[i]
 		const initialPrice = p.priceHistory.at(-1)
@@ -99,12 +149,25 @@ class Generator {
 	}
 
 	#nextNews() {
-		const chainId = Math.floor(Math.random() * this.chains.length)
-		this.newsHistory.push(Math.random() <= this.newsProbability ? [ chainId, this.chains[chainId].iterate() ] : null)
+		let theNews = null
+		if (Math.random() <= this.newsProbability) {
+			if (Math.random() < 0.3) {
+				const companyId = Math.floor(Math.random() * this.data.companies.length)
+				theNews = [ -1, this.#createPressRelease(companyId) ]
+			}
+			else {
+				const chainId = Math.floor(Math.random() * this.chains.length)
+				theNews = [ chainId, this.chains[chainId].iterate() ]
+			}
+		}
+		this.newsHistory.push(theNews)
 	}
 
 	next() {
-		for (let i = 0; i < this.data.companies.length; i++) this.#nextTechnicals(i, this.#applyNews(i))
+		for (let i = 0; i < this.data.companies.length; i++) {
+			this.#nextFundamentals(i)
+			this.#nextTechnicals(i, this.#applyNews(i))
+		}
 		this.#nextNews()
 		return {
 			prices: this.getLastPrices(),

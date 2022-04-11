@@ -1,9 +1,17 @@
-html, body, .row {
+html, body, .row, .columns {
 	height: 100%;
+}
+
+body {
+	overflow: hidden;
 }
 
 p {
 	margin: 0;
+}
+
+.button, button, input[type="submit"], input[type="reset"], input[type="button"] {
+	padding: 0 10px;
 }
 
 th, td {
@@ -11,22 +19,24 @@ th, td {
 	padding-bottom: 0;
 }
 
+.columns {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+
 #controlsContainer {
-	padding: 1.5rem;
-	width: 100%;
+	padding: 2.5rem;
+	padding-bottom: 0;
 	text-align: center;
 }
 
 #chartContainer {
-	position: relative;
+	width: 100%;
 	height: 100%;
 }
 
 #infoContainer {
-	height: 100%;
-	display: flex;
-	flex-direction: column;
-	justify-content: space-between;
 	background-color: #555;
 	color: #fff;
 }

@@ -1,7 +1,11 @@
 class Game {
+	#frequency
 	#timeout
 	#elements
+	#epoch
 	#chart
+	#scale
+	#averages
 	#cash
 	#stocks
 	#g
@@ -16,6 +20,15 @@ class Game {
 		}
 	}
 
+	#timestamp() {
+		return this.#epoch + 1000 * 60 * 60 * 24 * this.#g.getHistoryLength()
+	}
+
+	#zoom() {
+		const timestamp = this.#timestamp()
+		this.#chart.zoomX(this.#epoch + (timestamp - this.#epoch) * this.#scale, timestamp)
+	}
+
 	#write() {
 		this.#elements.portfolio.innerHTML = ""
 		let rows = []
@@ -27,12 +40,12 @@ class Game {
 			rows.push([ testData.companies[i], this.#stocks[i], v ])
 		}
 		rows.push([ "Cash", "", this.#cash ])
-		this.#elements.portfolioTotal.innerHTML = "$" + Math.round(totalValue * 100) / 100
+		this.#elements.portfolioTotal.innerHTML = "$" + helpers.format(totalValue)
 		for (let i = 0; i < rows.length; i++) {
 			const rowEl = document.createElement("tr")
 			for (let j = 0; j < 3; j++) {
 				const cellEl = document.createElement("td")
-				cellEl.innerHTML = (j == 2 ? "$" : "") + (j == 0 || rows[i][j] == "" ? rows[i][j] : Math.round(rows[i][j] * 100) / 100)
+				cellEl.innerHTML = (j == 2 ? "$" + helpers.format(rows[i][j]) : rows[i][j])
 				rowEl.appendChild(cellEl)
 			}
 			this.#elements.portfolio.appendChild(rowEl)
@@ -43,33 +56,25 @@ class Game {
 		const n = this.#g.getLastNews()
 		if (n) {
 			const newsP = document.createElement("p")
-			newsP.innerHTML = "(" + (this.#g.getHistoryLength() - 1) + ") " + testData.events[n[0]].names[n[1]]
+			const dateObj = new Date(this.#timestamp())
+			let date = dateObj.getFullYear() + "-"
+			date += helpers.pad(dateObj.getMonth() + 1, 2) + "-"
+			date += helpers.pad(dateObj.getDate(), 2)
+			date += " (" + (this.#g.getHistoryLength() - 1) + ")"
+			let headline
+			if (n[0] == -1) headline = n[1]
+			else headline = testData.events[n[0]].names[n[1]]
+			newsP.innerHTML = "<strong>" + date + "</strong> " + headline
 			this.#elements.news.appendChild(newsP)
-			this.#elements.news.scrollTop = this.#elements.news.scrollHeight
+			if (this.#elements.news.scrollTop > this.#elements.news.scrollHeight - this.#elements.news.offsetHeight - 100) {
+				this.#elements.news.scrollTop = this.#elements.news.scrollHeight
+			}
 		}
 	}
 
 	#draw() {
-		if (this.#chart && "destroy" in this.#chart) this.#chart.destroy()
-		const config = {
-			type: "line",
-			data: {
-				labels: Array.from(new Array(this.#g.getHistoryLength()), (value, index) => index).slice(-1000),
-				datasets: testData.companies.map((name, index) => ({
-					label: name,
-					borderColor: helpers.color(index / testData.companies.length),
-					data: this.#g.getPriceHistory(index).slice(-1000),
-				})),
-			},
-			options: {
-				scales: { y: { min: 0 } },
-				animation: false,
-				aspectRatio: 1.5,
-				spanGaps: true,
-				elements: { point: { radius: 0 } },
-			},
-		}
-		this.#chart = new Chart(this.#elements.chart, config)
+		this.#chart.appendData(this.#g.getLastPrices().map((price) => ({ data: [ [ this.#timestamp(), price ] ] })))
+		this.#zoom()
 	}
 
 	#tick() {
@@ -77,12 +82,36 @@ class Game {
 		this.#write()
 		this.#post()
 		this.#draw()
-		this.#timeout = setTimeout(this.#tick.bind(this), 2000)
+		this.#timeout = setTimeout(this.#tick.bind(this), this.#frequency)
 	}
 
-	restart() {
+	restart(initialFrequency = 1000) {
 		clearTimeout(this.#timeout)
 		if (this.#chart && "destroy" in this.#chart) this.#chart.destroy()
+		this.#chart = new ApexCharts(this.#elements.chart, {
+			chart: {
+				type: "line",
+				height: "100%",
+				animations: { enabled: false },
+				toolbar: { tools: { download: false } },
+			},
+			series: testData.companies.map((name, index) => ({
+				name,
+				data: [],
+			})),
+			xaxis: { type: "datetime" },
+			yaxis: { min: 0, decimalsInFloat: 2, forceNiceScale: true },
+			noData: { text: "No data to display" },
+			annotations: { position: "front" },
+			stroke: { curve: "smooth" },
+			colors: [ "#f06033", "#f0bf33", "#64f033", "#33c3f0", "#6033f0", "#f033c3" ],
+		})
+		this.#chart.render()
+		this.#scale = 0.2
+		this.#elements.chart.onwheel = (event) => {
+			this.#scale = Math.max(0.0001, Math.min(0.9999, this.#scale - 0.0002 * event.deltaY))
+			this.#zoom()
+		}
 		this.#elements.companies.innerHTML = ""
 		for (let i = 0; i < testData.companies.length; i++) {
 			const c = document.createElement("option")
@@ -93,10 +122,13 @@ class Game {
 		}
 		this.#elements.portfolioTotal.innerHTML = "$0"
 		this.#elements.portfolio.innerHTML = ""
-		this.#elements.news.innerHTML = "<p>NEWS</p>"
-		this.#cash = 1000
+		this.#elements.news.innerHTML = "<p><strong>NEWS</strong></p>"
+		this.#epoch = Date.now()
+		this.#averages = testData.companies.map((name) => 0)
+		this.#cash = 10000
 		this.#stocks = Array.from(testData.companies, (value, index) => 0)
 		this.#g = new Generator(testData, 0.2, true)
+		this.#frequency = initialFrequency
 		this.#tick()
 	}
 
@@ -106,17 +138,27 @@ class Game {
 	}
 
 	transact(shares) {
+		if (shares == 0) return
 		const i = this.getSelectedCompany()
-		this.#cash -= shares * this.#g.getLastPrices()[i]
+		const price = this.#g.getLastPrices()[i]
+		this.#cash -= shares * price
 		this.#stocks[i] += shares
 		this.#write()
+		if (this.#averages[i] != 0) this.#chart.removeAnnotation("average-" + i)
+		if (this.#stocks[i] == 0) this.#averages[i] = 0
+		else this.#averages[i] = ((this.#stocks[i] - shares) * this.#averages[i] + shares * price) / this.#stocks[i]
+		if (this.#averages[i] != 0) this.#chart.addYaxisAnnotation({
+			id: "average-" + i,
+			y: this.#averages[i],
+			label: { text: testData.companies[i] + " average ($" + helpers.format(this.#averages[i]) + ")" },
+			strokeDashArray: 10,
+			borderColor: "#000",
+			fillColor: "#000",
+		})
 	}
 
 	close() {
-		const i = this.getSelectedCompany()
-		this.#cash += this.#stocks[i] * this.#g.getLastPrices()[i]
-		this.#stocks[i] = 0
-		this.#write()
+		this.transact(-this.#stocks[this.getSelectedCompany()])
 	}
 }
 
