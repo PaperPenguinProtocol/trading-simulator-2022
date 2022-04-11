@@ -21,7 +21,7 @@ class Game {
 	}
 
 	#timestamp() {
-		return this.#epoch + 1000 * 60 * 60 * 24 * this.#g.getHistoryLength()
+		return this.#epoch + 1000 * 60 * 60 * 24 * this.#g.getTick()
 	}
 
 	#zoom() {
@@ -47,7 +47,7 @@ class Game {
 				const cellEl = document.createElement("td")
 				cellEl.innerHTML = ((j == 1 && i < rows.length - 1) || j == 3 ? "$" + helpers.format(rows[i][j]) : rows[i][j])
 				if (j == 1 && i < rows.length - 1) {
-					const previousPrice = this.#g.getHistoryLength() == 1 ? rows[i][j] : this.#g.getPriceHistory(i).at(-2)
+					const previousPrice = (this.#g.getTick() == 0 ? rows[i][j] : this.#g.getPriceHistory(i).at(-2))
 					cellEl.classList.add(previousPrice == rows[i][j] ? "primary" : (previousPrice < rows[i][j] ? "success" : "danger"))
 				}
 				rowEl.appendChild(cellEl)
@@ -64,7 +64,7 @@ class Game {
 			let date = dateObj.getFullYear() + " "
 			date += dateObj.toLocaleString("default", { month: "short" }) + " "
 			date += helpers.pad(dateObj.getDate(), 2)
-			date += " (" + (this.#g.getHistoryLength() - 1) + ")"
+			date += " (" + this.#g.getTick() + ")"
 			let headline
 			if (n[0] == -1) headline = n[1]
 			else headline = testData.events[n[0]].names[n[1]]
