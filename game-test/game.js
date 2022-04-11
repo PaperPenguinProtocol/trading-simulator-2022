@@ -37,15 +37,19 @@ class Game {
 		for (let i = 0; i < testData.companies.length; i++) {
 			const v = this.#stocks[i] * lastPrices[i]
 			totalValue += v
-			rows.push([ testData.companies[i], this.#stocks[i], v ])
+			rows.push([ testData.companies[i], lastPrices[i], this.#stocks[i], v ])
 		}
-		rows.push([ "Cash", "", this.#cash ])
+		rows.push([ "Cash", "", "", this.#cash ])
 		this.#elements.portfolioTotal.innerHTML = "$" + helpers.format(totalValue)
 		for (let i = 0; i < rows.length; i++) {
 			const rowEl = document.createElement("tr")
-			for (let j = 0; j < 3; j++) {
+			for (let j = 0; j < 4; j++) {
 				const cellEl = document.createElement("td")
-				cellEl.innerHTML = (j == 2 ? "$" + helpers.format(rows[i][j]) : rows[i][j])
+				cellEl.innerHTML = ((j == 1 && i < rows.length - 1) || j == 3 ? "$" + helpers.format(rows[i][j]) : rows[i][j])
+				if (j == 1 && i < rows.length - 1) {
+					const previousPrice = this.#g.getHistoryLength() == 1 ? rows[i][j] : this.#g.getPriceHistory(i).at(-2)
+					cellEl.classList.add(previousPrice == rows[i][j] ? "primary" : (previousPrice < rows[i][j] ? "success" : "danger"))
+				}
 				rowEl.appendChild(cellEl)
 			}
 			this.#elements.portfolio.appendChild(rowEl)
@@ -57,8 +61,8 @@ class Game {
 		if (n) {
 			const newsP = document.createElement("p")
 			const dateObj = new Date(this.#timestamp())
-			let date = dateObj.getFullYear() + "-"
-			date += helpers.pad(dateObj.getMonth() + 1, 2) + "-"
+			let date = dateObj.getFullYear() + " "
+			date += dateObj.toLocaleString("default", { month: "short" }) + " "
 			date += helpers.pad(dateObj.getDate(), 2)
 			date += " (" + (this.#g.getHistoryLength() - 1) + ")"
 			let headline
@@ -77,8 +81,8 @@ class Game {
 		this.#zoom()
 	}
 
-	#tick() {
-		this.#g.next()
+	#tick(next = true) {
+		if (next) this.#g.next()
 		this.#write()
 		this.#post()
 		this.#draw()
@@ -93,7 +97,10 @@ class Game {
 				type: "line",
 				height: "100%",
 				animations: { enabled: false },
-				toolbar: { tools: { download: false } },
+				toolbar: { show: false },
+				zoom: { enabled: false },
+				background: "transparent",
+				foreColor: "#fff",
 			},
 			series: testData.companies.map((name, index) => ({
 				name,
@@ -104,7 +111,10 @@ class Game {
 			noData: { text: "No data to display" },
 			annotations: { position: "front" },
 			stroke: { curve: "smooth" },
+			legend: { itemMargin: { horizontal: 15, vertical: 5 } },
+			grid: { borderColor: "#888" },
 			colors: [ "#f06033", "#f0bf33", "#64f033", "#33c3f0", "#6033f0", "#f033c3" ],
+			theme: { mode: "dark" },
 		})
 		this.#chart.render()
 		this.#scale = 0.2
@@ -129,7 +139,7 @@ class Game {
 		this.#stocks = Array.from(testData.companies, (value, index) => 0)
 		this.#g = new Generator(testData, 0.2, true)
 		this.#frequency = initialFrequency
-		this.#tick()
+		this.#tick(false)
 	}
 
 	getSelectedCompany() {
@@ -150,10 +160,13 @@ class Game {
 		if (this.#averages[i] != 0) this.#chart.addYaxisAnnotation({
 			id: "average-" + i,
 			y: this.#averages[i],
-			label: { text: testData.companies[i] + " average ($" + helpers.format(this.#averages[i]) + ")" },
+			label: {
+				text: testData.companies[i] + " average ($" + helpers.format(this.#averages[i]) + ")",
+				style: { background: "#333", color: "#fff" },
+			},
 			strokeDashArray: 10,
-			borderColor: "#000",
-			fillColor: "#000",
+			borderColor: "#fff",
+			fillColor: "#fff",
 		})
 	}
 

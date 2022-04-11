@@ -16,18 +16,20 @@
 		<div class="row">
 			<div class="eight columns">
 				<div class="container" id="controlsContainer">
-					<button onclick="game.restart()" class="button-primary">(Re)start</button>
-					<button onclick="game.transact(1)">Buy 1</button>
-					<button onclick="game.transact(10)">Buy 10</button>
-					<button onclick="game.transact(-1)">Sell 1</button>
-					<button onclick="game.transact(-10)">Sell 10</button>
-					<button onclick="game.close()">Close position</button>
+					<button onclick="game.restart()">(Re)start</button>
+					<button onclick="game.transact(1)" class="button-success">Buy 1</button>
+					<button onclick="game.transact(10)" class="button-success">Buy 10</button>
+					<button onclick="game.transact(-1)" class="button-danger">Sell 1</button>
+					<button onclick="game.transact(-10)" class="button-danger">Sell 10</button>
+					<button onclick="game.close()" class="button-primary">Close position</button>
 					<select id="companies"></select>
 				</div>
 				<div id="chartContainer">
 					<div id="chart">
 						<div class="container">
-							<p>The chart will appear here. Scroll on it (e.g. using mousewheel) to zoom.</p>
+							<p>The chart will appear here.</p>
+							<p>Scroll on the chart (e.g. using mousewheel) to zoom.</p>
+							<p>Click on labels below the chart to show/hide the respective lines.</p>
 						</div>
 					</div>
 				</div>
@@ -37,6 +39,7 @@
 					<table class="u-full-width">
 						<thead>
 							<th>Total</th>
+							<th></th>
 							<th></th>
 							<th id="portfolioTotal">$0.00</th>
 						</thead>

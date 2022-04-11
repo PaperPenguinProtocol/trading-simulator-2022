@@ -4,19 +4,70 @@ html, body, .row, .columns {
 
 body {
 	overflow: hidden;
+	color: #fff;
+	background-color: #333;
 }
 
 p {
 	margin: 0;
 }
 
-.button, button, input[type="submit"], input[type="reset"], input[type="button"] {
+.button, button, input[type="submit"], input[type="reset"], input[type="button"],
+.button:hover, button:hover, input[type="submit"]:hover, input[type="reset"]:hover, input[type="button"]:hover,
+.button:focus, button:focus, input[type="submit"]:focus, input[type="reset"]:focus, input[type="button"]:focus {
 	padding: 0 10px;
+	color: #fff;
+}
+
+.button.button-success, button.button-success, input[type="submit"].button-success, input[type="reset"].button-success, input[type="button"].button-success {
+	color: #333;
+	background-color: #64f033;
+	border-color: #64f033;
+}
+
+.button.button-success:hover, button.button-success:hover, input[type="submit"].button-success:hover, input[type="reset"].button-success:hover, input[type="button"].button-success:hover,
+.button.button-success:focus, button.button-success:focus, input[type="submit"].button-success:focus, input[type="reset"].button-success:focus, input[type="button"].button-success:focus {
+	background-color: #4fdb1e;
+	border-color: #4fdb1e;
+}
+
+.button.button-danger, button.button-danger, input[type="submit"].button-danger, input[type="reset"].button-danger, input[type="button"].button-danger {
+	color: #fff;
+	background-color: #f06033;
+	border-color: #f06033;
+}
+
+.button.button-danger:hover, button.button-danger:hover, input[type="submit"].button-danger:hover, input[type="reset"].button-danger:hover, input[type="button"].button-danger:hover,
+.button.button-danger:focus, button.button-danger:focus, input[type="submit"].button-danger:focus, input[type="reset"].button-danger:focus, input[type="button"].button-danger:focus {
+	background-color: #db4b1e;
+	border-color: #db4b1e;
+}
+
+.primary {
+	color: #33c3f0;
+}
+
+.success {
+	color: #64f033;
+}
+
+.danger {
+	color: #f06033;
+}
+
+input[type="email"], input[type="number"], input[type="search"], input[type="text"], input[type="tel"], input[type="url"], input[type="password"], textarea, select {
+	background-color: transparent;
 }
 
 th, td {
-	padding: 0.1rem;
+	padding: 0.3rem;
 	padding-bottom: 0;
+	text-align: right;
+	line-height: 1;
+}
+
+th:first-child, td:first-child {
+	text-align: left;
 }
 
 .columns {
@@ -37,8 +88,7 @@ th, td {
 }
 
 #infoContainer {
-	background-color: #555;
-	color: #fff;
+	background-color: #222;
 }
 
 #infoContainer > * {
@@ -46,11 +96,15 @@ th, td {
 }
 
 #portfolio td:nth-child(1) {
-	width: 40%;
+	width: 15%;
 }
 
 #portfolio td:nth-child(2) {
-	width: 20%;
+	width: 35%;
+}
+
+#portfolio td:nth-child(3) {
+	width: 15%;
 }
 
 #news {
