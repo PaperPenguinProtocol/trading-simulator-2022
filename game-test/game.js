@@ -10,13 +10,14 @@ class Game {
 	#stocks
 	#g
 
-	constructor(companiesEl, chartEl, portfolioTotalEl, portfolioEl, newsEl) {
+	constructor(companiesEl, chartEl, portfolioTotalEl, portfolioEl, newsEl, sectorsAndProductsEl) {
 		this.#elements = {
 			companies: companiesEl,
 			chart: chartEl,
 			portfolioTotal: portfolioTotalEl,
 			portfolio: portfolioEl,
 			news: newsEl,
+			sectorsAndProducts: sectorsAndProductsEl,
 		}
 	}
 
@@ -53,6 +54,26 @@ class Game {
 				rowEl.appendChild(cellEl)
 			}
 			this.#elements.portfolio.appendChild(rowEl)
+		}
+		this.#elements.sectorsAndProducts.innerHTML = "<p><strong>SECTORS (PRODUCTS)</strong></p>"
+		for (let i = 0; i < testData.companies.length; i++) {
+			const sap = this.#g.getSectorsAndProducts(i)
+			const sapP = document.createElement("p")
+			let description = "<strong>" + testData.companies[i] + "</strong>"
+			for (const sectorName in sap) {
+				description += " - " + sectorName
+				if (sap[sectorName].length > 0) {
+					description += " ("
+					const minorCount = sap[sectorName].filter((product) => (product < 10000)).length
+					const majorCount = sap[sectorName].length - minorCount
+					if (minorCount > 0) description += minorCount + " minor"
+					if (minorCount > 0 && majorCount > 0) description += ","
+					if (majorCount > 0) description += majorCount + " major"
+					description += ")"
+				}
+			}
+			sapP.innerHTML = description + " -"
+			this.#elements.sectorsAndProducts.appendChild(sapP)
 		}
 	}
 
@@ -99,6 +120,7 @@ class Game {
 				animations: { enabled: false },
 				toolbar: { show: false },
 				zoom: { enabled: false },
+				selection: { fill: { color: "#fff" }, stroke: { color: "#fff" } },
 				background: "transparent",
 				foreColor: "#fff",
 			},
@@ -106,13 +128,34 @@ class Game {
 				name,
 				data: [],
 			})),
-			xaxis: { type: "datetime" },
-			yaxis: { min: 0, decimalsInFloat: 2, forceNiceScale: true },
-			noData: { text: "No data to display" },
+			xaxis: {
+				type: "datetime",
+				labels: { datetimeFormatter: { month: "yyyy MMM", day: "MMM dd", hour: "dd HH:mm" }, style: { fontSize: "11px" } },
+				axisBorder: { color: "#888" },
+				axisTicks: { color: "#888" },
+			},
+			yaxis: {
+				min: 0,
+				decimalsInFloat: 2,
+				forceNiceScale: true,
+				labels: { formatter: (value) => ("$" + value), style: { fontSize: "11px" } },
+				axisBorder: { color: "#888" },
+				axisTicks: { color: "#888" },
+				crosshairs: { stroke: { color: "555" } },
+			},
+			noData: { text: "No data to display", style: { fontSize: "3.6rem" } },
 			annotations: { position: "front" },
 			stroke: { curve: "smooth" },
-			legend: { itemMargin: { horizontal: 15, vertical: 5 } },
+			legend: {
+				position: "top",
+				itemMargin: { horizontal: 15, vertical: 5 },
+				markers: { offsetY: -1 },
+				fontSize: "11px",
+			},
+			dataLabels: { style: { fontSize: "1.5rem" } },
+			tooltip: { x: { format: "MMM dd" }, style: { fontSize: "11px" } },
 			grid: { borderColor: "#888" },
+			markers: { strokeColors: "#333" },
 			colors: [ "#f06033", "#f0bf33", "#64f033", "#33c3f0", "#6033f0", "#f033c3" ],
 			theme: { mode: "dark" },
 		})
@@ -133,6 +176,7 @@ class Game {
 		this.#elements.portfolioTotal.innerHTML = "$0"
 		this.#elements.portfolio.innerHTML = ""
 		this.#elements.news.innerHTML = "<p><strong>NEWS</strong></p>"
+		this.#elements.sectorsAndProducts.innerHTML = ""
 		this.#epoch = Date.now()
 		this.#averages = testData.companies.map((name) => 0)
 		this.#cash = 10000
@@ -161,8 +205,11 @@ class Game {
 			id: "average-" + i,
 			y: this.#averages[i],
 			label: {
-				text: testData.companies[i] + " average ($" + helpers.format(this.#averages[i]) + ")",
-				style: { background: "#333", color: "#fff" },
+				text: testData.companies[i] + " average $" + helpers.format(this.#averages[i]),
+				textAnchor: "start",
+				position: "left",
+				borderColor: "#fff",
+				style: { background: "#333", color: "#fff", fontSize: "11px" },
 			},
 			strokeDashArray: 10,
 			borderColor: "#fff",
@@ -182,5 +229,6 @@ window.onload = () => {
 		document.getElementById("portfolioTotal"),
 		document.getElementById("portfolio"),
 		document.getElementById("news"),
+		document.getElementById("sectorsAndProducts"),
 	)
 }

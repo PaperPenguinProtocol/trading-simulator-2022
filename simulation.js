@@ -10,6 +10,9 @@ helpers = {
 		if (multiplier > 1) return multiplier - 1
 		return 2 * (multiplier - 1)
 	},
+	pick: (arr) => {
+		return Math.floor(Math.random() * arr.length)
+	},
 	remove: (arr, value) => {
 		arr.splice(arr.indexOf(value), 1)
 	},
@@ -85,11 +88,6 @@ class Company {
 		return this.#priceHistory
 	}
 
-	addPrice(price) {
-		if (price <= 0) throw price.toString()
-		this.#priceHistory.push(price)
-	}
-
 	getSectors() {
 		return this.#sectors
 	}
@@ -110,7 +108,7 @@ class Company {
 	}
 
 	employ(employeesCountDiff) {
-		this.#employeesCount += Math.min(2 - this.#employeesCount, employeesCountDiff)
+		this.#employeesCount += Math.max(2 - this.#employeesCount, employeesCountDiff)
 	}
 
 	getCash() {
@@ -132,8 +130,8 @@ class Company {
 		return this.#fixedCosts
 	}
 
-	multiplyFixedCosts(fixedCostsCoeff) {
-		this.#fixedCosts *= fixedCostsCoeff
+	addFixedCosts(fixedCostsDiff) {
+		this.#fixedCosts += Math.max(-this.#fixedCosts, fixedCostsDiff)
 	}
 
 	spend() {
@@ -141,8 +139,13 @@ class Company {
 		this.#cash -= this.#employeesCount * 100 * helpers.multiply(0.1)
 	}
 
-	getRevenueSources() {
-		return this.#revenueSources
+	getRevenueSources(sectorName = null) {
+		if (sectorName === null) return this.#revenueSources
+		return this.#revenueSources.filter((source) => (source == sectorName))
+	}
+
+	getTotalRevenue(sectorName = null) {
+		return this.getRevenueSources(sectorName).reduce((prevValue, curValue) => (prevValue + curValue[1]), 0)
 	}
 
 	addRevenueSource(sectorName, revenue) {
@@ -150,10 +153,17 @@ class Company {
 	}
 
 	earn() {
-		const revenue = this.#revenueSources.reduce((prevValue, curValue) => (
-			prevValue + curValue[1] * (Math.random() - 0.4)
-		), 0)
-		this.#cash += revenue
+		this.#cash += this.getTotalRevenue() * helpers.add(1, 0.8)
+	}
+
+	next(smoothing = 0) {
+		this.spend()
+		this.earn()
+		let p = this.#pressure * (1 - smoothing)
+		const noise = helpers.add(0.7) * Math.max(0.02, 0.2 * Math.abs(p))
+		p += noise
+		this.#priceHistory.push(this.#priceHistory.at(-1) * (p > 0 ? p + 1 : 1 / (1 - p)))
+		this.#pressure -= p
 	}
 }
 
@@ -167,15 +177,18 @@ class Generator {
 	constructor(data, newsProbability = 1, fixedInitialPrice = false) {
 		this.#data = data
 		this.#newsProbability = newsProbability
-		this.#companies = this.#data.companies.map((name) => (new Company(
-			0,
-			fixedInitialPrice ? 100 : Math.random() * 90 + 10,
-			[ "gaming" ],
-			Math.floor(Math.pow(Math.random(), 5) * 10000) + 10,
-			Math.pow(Math.random(), 0.5) * 100000 + 1000,
-			Math.random() * 10 + 100,
-			[ [ "gaming", Math.random() * 1000 + 100 ] ],
-		)))
+		this.#companies = this.#data.companies.map((name) => {
+			const size = Math.pow(Math.random(), 0.7) * 1000 + 10
+			return new Company(
+				0,
+				fixedInitialPrice ? 100 : Math.random() * 90 + 10,
+				[ "gaming" ],
+				Math.floor(helpers.multiply(0.1) * size),
+				size * 100,
+				helpers.multiply(0.1) * size,
+				[ [ "gaming", helpers.multiply(0.1) * size * 1000 ] ],
+			)
+		})
 		this.#chains = this.#data.events.map((chain) => (new Markov(chain.transitions, 0)))
 		this.#newsHistory = [ null ]
 	}
@@ -185,7 +198,7 @@ class Generator {
 	}
 
 	getLastPrices() {
-		return this.#data.companies.map((name, index) => (this.#companies[index].getPriceHistory().at(-1)))
+		return this.#companies.map((company) => company.getPriceHistory().at(-1))
 	}
 
 	getLastNews() {
@@ -194,6 +207,14 @@ class Generator {
 
 	getPriceHistory(i) {
 		return this.#companies[i].getPriceHistory()
+	}
+
+	getSectorsAndProducts(i) {
+		const company = this.#companies[i]
+		return Object.fromEntries(company.getSectors().map((sectorName) => [
+			sectorName,
+			company.getRevenueSources(sectorName).map((product) => product[1]),
+		]))
 	}
 
 	#applyNews(i) {
@@ -213,7 +234,7 @@ class Generator {
 		const sectorsCountDiff = company.getSectors().length - initialSectorsCount
 		if (sectorsCountDiff != 0) newsC += 0.2 / sectorsCountDiff
 		if ("employ" in c) for (const sectorName in c.employ) if (sectors.includes(sectorName) && Math.random() < c.employ[sectorName][0]) {
-			company.employ(c.employ[sectorName][1])
+			company.employ(Math.round((1 - c.employ[sectorName][1]) * company.getEmployeesCount()))
 			newsC += 0.4 * (c.employ[sectorName][1] - 1)
 		}
 		return newsC
@@ -232,20 +253,24 @@ class Generator {
 			return headline
 		}
 		if (Math.pow(Math.random(), Math.log10(company.getEmployeesCount())) < 0.01) {
-			const revenue = Math.pow(Math.random(), 3) * 10000 + 100
-			const sectorName = sectors[Math.floor(Math.random() * sectors.length)]
+			const revenue = Math.pow(Math.random(), 3) * 1000000 + 10000
+			const sectorName = sectors[helpers.pick(sectors)]
 			company.addRevenueSource(sectorName, revenue)
-			return "Company " + name + " releases new " + (revenue < 1000 ? "minor" : "major") + " " + sectorName + " product"
+			company.employ(Math.floor(revenue / 10000))
+			company.addFixedCosts(revenue / 1000)
+			return "Company " + name + " releases new " + (revenue < 100000 ? "minor" : "major") + " " + sectorName + " product"
 		}
-		if (Math.random() < 0.95) {
-			if (company.getSectors().includes("retail")) {
-				company.removeSector("retail")
-				return "Company " + name + " exits retail sector"
-			}
-			else {
-				company.addSector("retail")
-				return "Company " + name + " enters retail sector"
-			}
+		if (Math.random() < 0.95 && company.getSectors().length > 0) {
+			const sectorRevenues = company.getSectors().map((sectorName) => ([
+				sectorName,
+				company.getTotalRevenue(sectorName),
+			]))
+			const chosen = sectorRevenues[Math.min(sectorRevenues.map((sr) => sr[1]))]
+			company.removeSector(chosen[0])
+			const firedCount = Math.round(-Math.floor(chosen[1] / 10000) * helpers.multiply(0.2))
+			company.employ(firedCount)
+			company.addFixedCosts(-chosen[1] / 1000)
+			return "Company " + name + " exits " + chosen[0] + " sector, firing " + firedCount
 		}
 		return "Company " + name + " may or may not be a good investment, analysts say"
 	}
@@ -256,36 +281,27 @@ class Generator {
 		if (this.getTick() > 0 && thisReport.tick == this.getTick()) {
 			const lastReport = company.getReports().at(-2)
 			let coeff = (thisReport.cash - lastReport.cash) / 10000
-			const parameter = 1000
+			const parameter = 10000
 			coeff = (coeff > 0 ? 1 : -1) * (-parameter / (parameter + Math.abs(coeff)) + 1)
-			company.addPressure(0.5 * coeff * company.getPriceHistory().at(-1))
+			company.addPressure(0.5 * coeff)
 		}
-		if (Math.random() < 0.1) company.multiplyFixedCosts(helpers.multiply(1))
-		company.spend()
-		company.earn()
+		if (Math.random() < 0.2) company.employ(Math.round(helpers.add() * 0.05 * company.getEmployeesCount()))
 	}
 
 	#nextTechnicals(i, newsC) {
 		const company = this.#companies[i]
-		const initialPrice = company.getPriceHistory().at(-1)
-		company.addPressure(initialPrice * newsC)
-		const rawPrice = initialPrice + 0.8 * company.getPressure()
-		company.addPressure(initialPrice - rawPrice)
-		const noise = helpers.add(0.7)
-		const finalPrice = rawPrice + noise * Math.max(Math.abs(rawPrice - initialPrice) * 0.2, rawPrice * 0.02)
-		company.addPrice(finalPrice)
-		company.addPressure(rawPrice - finalPrice)
+		company.addPressure(newsC)
 	}
 
 	#nextNews() {
 		let theNews = null
 		if (Math.random() <= this.#newsProbability) {
 			if (Math.random() < 0.3) {
-				const companyId = Math.floor(Math.random() * this.#companies.length)
+				const companyId = helpers.pick(this.#companies)
 				theNews = [ -1, this.#createPressRelease(companyId) ]
 			}
 			else {
-				const chainId = Math.floor(Math.random() * this.#chains.length)
+				const chainId = helpers.pick(this.#chains)
 				theNews = [ chainId, this.#chains[chainId].iterate() ]
 			}
 		}
@@ -296,6 +312,7 @@ class Generator {
 		for (let i = 0; i < this.#companies.length; i++) {
 			this.#nextFundamentals(i)
 			this.#nextTechnicals(i, this.#applyNews(i))
+			this.#companies[i].next(0.2)
 		}
 		this.#nextNews()
 		return {

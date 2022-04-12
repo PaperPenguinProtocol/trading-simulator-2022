@@ -78,11 +78,11 @@ th:first-child, td:first-child {
 	display: flex;
 	flex-direction: column;
 	justify-content: space-between;
+	padding: 2.5rem 0;
 }
 
 #controlsContainer {
-	padding: 2.5rem;
-	padding-bottom: 0;
+	margin: 0 2.5rem;
 	text-align: center;
 }
 
@@ -96,7 +96,11 @@ th:first-child, td:first-child {
 }
 
 #infoContainer > * {
-	padding: 2.5rem;
+	margin: 0 2.5rem;
+}
+
+#infoContainer > *:first-child > * {
+	margin-bottom: 2.5rem;
 }
 
 #portfolio td:nth-child(1) {
