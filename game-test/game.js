@@ -1,16 +1,18 @@
 class Game {
+	#data
+	#state
 	#frequency
 	#timeout
 	#elements
 	#epoch
 	#chart
 	#scale
-	#averages
-	#cash
-	#stocks
+	#assets
 	#g
 
-	constructor(companiesEl, chartEl, portfolioTotalEl, portfolioEl, newsEl, sectorsAndProductsEl) {
+	constructor(data, companiesEl, chartEl, portfolioTotalEl, portfolioEl, newsEl, sectorsAndProductsEl) {
+		this.#data = data
+		this.#state = "waiting"
 		this.#elements = {
 			companies: companiesEl,
 			chart: chartEl,
@@ -19,29 +21,45 @@ class Game {
 			news: newsEl,
 			sectorsAndProducts: sectorsAndProductsEl,
 		}
+		this.#assets = { cash: 10000, stocks: [], averages: [] }
+		for (let i = 0; i < this.#data.companies.length; i++) {
+			const c = document.createElement("option")
+			c.value = i
+			c.innerHTML = this.#data.companies[i]
+			if (i == 0) c.selected = true
+			this.#elements.companies.appendChild(c)
+		}
 	}
 
 	#timestamp() {
 		return this.#epoch + 1000 * 60 * 60 * 24 * this.#g.getTick()
 	}
 
-	#zoom() {
+	#zoomChart() {
 		const timestamp = this.#timestamp()
 		this.#chart.zoomX(this.#epoch + (timestamp - this.#epoch) * this.#scale, timestamp)
 	}
 
-	#write() {
+	#resetPortfolio() {
 		this.#elements.portfolio.innerHTML = ""
+	}
+
+	#resetPortfolioTotal() {
+		this.#elements.portfolioTotal.innerHTML = "$" + helpers.format(this.#assets.cash)
+	}
+
+	#updatePortfolio() {
 		let rows = []
 		const lastPrices = this.#g.getLastPrices()
-		let totalValue = this.#cash
-		for (let i = 0; i < testData.companies.length; i++) {
-			const v = this.#stocks[i] * lastPrices[i]
+		let totalValue = this.#assets.cash
+		for (let i = 0; i < this.#g.getCompanyNames().length; i++) {
+			const v = this.#assets.stocks[i] * lastPrices[i]
 			totalValue += v
-			rows.push([ testData.companies[i], lastPrices[i], this.#stocks[i], v ])
+			rows.push([ this.#g.getCompanyNames()[i], lastPrices[i], this.#assets.stocks[i], v ])
 		}
-		rows.push([ "Cash", "", "", this.#cash ])
+		rows.push([ "Cash", "", "", this.#assets.cash ])
 		this.#elements.portfolioTotal.innerHTML = "$" + helpers.format(totalValue)
+		this.#resetPortfolio()
 		for (let i = 0; i < rows.length; i++) {
 			const rowEl = document.createElement("tr")
 			for (let j = 0; j < 4; j++) {
@@ -55,40 +73,24 @@ class Game {
 			}
 			this.#elements.portfolio.appendChild(rowEl)
 		}
-		this.#elements.sectorsAndProducts.innerHTML = "<p><strong>SECTORS (PRODUCTS)</strong></p>"
-		for (let i = 0; i < testData.companies.length; i++) {
-			const sap = this.#g.getSectorsAndProducts(i)
-			const sapP = document.createElement("p")
-			let description = "<strong>" + testData.companies[i] + "</strong>"
-			for (const sectorName in sap) {
-				description += " - " + sectorName
-				if (sap[sectorName].length > 0) {
-					description += " ("
-					const minorCount = sap[sectorName].filter((product) => (product < 10000)).length
-					const majorCount = sap[sectorName].length - minorCount
-					if (minorCount > 0) description += minorCount + " minor"
-					if (minorCount > 0 && majorCount > 0) description += ","
-					if (majorCount > 0) description += majorCount + " major"
-					description += ")"
-				}
-			}
-			sapP.innerHTML = description + " -"
-			this.#elements.sectorsAndProducts.appendChild(sapP)
-		}
 	}
 
-	#post() {
+	#resetNews() {
+		this.#elements.news.innerHTML = "<p><strong>NEWS</strong></p>"
+	}
+
+	#updateNews() {
 		const n = this.#g.getLastNews()
 		if (n) {
 			const newsP = document.createElement("p")
 			const dateObj = new Date(this.#timestamp())
 			let date = dateObj.getFullYear() + " "
-			date += dateObj.toLocaleString("default", { month: "short" }) + " "
+			date += dateObj.toLocaleString("en-US", { month: "short" }) + " "
 			date += helpers.pad(dateObj.getDate(), 2)
 			date += " (" + this.#g.getTick() + ")"
 			let headline
 			if (n[0] == -1) headline = n[1]
-			else headline = testData.events[n[0]].names[n[1]]
+			else headline = this.#g.getHeadline(n[0], n[1])
 			newsP.innerHTML = "<strong>" + date + "</strong> " + headline
 			this.#elements.news.appendChild(newsP)
 			if (this.#elements.news.scrollTop > this.#elements.news.scrollHeight - this.#elements.news.offsetHeight - 100) {
@@ -97,22 +99,70 @@ class Game {
 		}
 	}
 
-	#draw() {
-		this.#chart.appendData(this.#g.getLastPrices().map((price) => ({ data: [ [ this.#timestamp(), price ] ] })))
-		this.#zoom()
+	#resetSectorsAndProducts() {
+		this.#elements.sectorsAndProducts.innerHTML = ""
+	}
+
+	#updateSectorsAndProducts() {
+		this.#elements.sectorsAndProducts.innerHTML = "<p><strong>SECTORS (PRODUCTS)</strong></p>"
+		for (let i = 0; i < this.#g.getCompanyNames().length; i++) {
+			const sap = this.#g.getSectorsAndProducts(i)
+			const sapStrings = []
+			for (const sectorName in sap) {
+				let s = " " + sectorName
+				if (sap[sectorName].length > 0) {
+					s += " ("
+					const minorCount = sap[sectorName].filter((product) => (product < 100000)).length
+					const majorCount = sap[sectorName].length - minorCount
+					if (minorCount > 0) s += minorCount + " minor"
+					if (minorCount > 0 && majorCount > 0) s += ", "
+					if (majorCount > 0) s += majorCount + " major"
+					s += ")"
+				}
+				sapStrings.push(s)
+			}
+			const sapP = document.createElement("p")
+			sapP.innerHTML = "<strong>" + this.#g.getCompanyNames()[i] + "</strong>" + (sapStrings.length > 0 ? ":" : "") + sapStrings.join(",")
+			this.#elements.sectorsAndProducts.appendChild(sapP)
+		}
+	}
+
+	#resetChart() {
+		if (this.#chart && "destroy" in this.#chart) this.#chart.destroy()
+	}
+
+	#updateChart() {
+		this.#chart.appendData(this.#g.getLastPrices().map((price) => ({
+			data: [ [ this.#timestamp(), Math.round(price * 100) / 100 ] ],
+		})))
+		this.#zoomChart()
 	}
 
 	#tick(next = true) {
 		if (next) this.#g.next()
-		this.#write()
-		this.#post()
-		this.#draw()
+		this.#updatePortfolio()
+		this.#updateNews()
+		this.#updateSectorsAndProducts()
+		this.#updateChart()
 		this.#timeout = setTimeout(this.#tick.bind(this), this.#frequency)
 	}
 
-	restart(initialFrequency = 1000) {
+	stop() {
 		clearTimeout(this.#timeout)
-		if (this.#chart && "destroy" in this.#chart) this.#chart.destroy()
+		this.#state = "waiting"
+		this.#resetPortfolio()
+		this.#resetPortfolioTotal()
+		this.#resetNews()
+		this.#resetSectorsAndProducts()
+		this.#resetChart()
+	}
+
+	start(initialFrequency = 1000) {
+		if (this.#state == "playing") this.stop()
+		this.#state = "playing"
+		this.#frequency = initialFrequency
+		this.#epoch = Date.now()
+		this.#resetNews()
 		this.#chart = new ApexCharts(this.#elements.chart, {
 			chart: {
 				type: "line",
@@ -124,7 +174,7 @@ class Game {
 				background: "transparent",
 				foreColor: "#fff",
 			},
-			series: testData.companies.map((name, index) => ({
+			series: this.#data.companies.map((name, index) => ({
 				name,
 				data: [],
 			})),
@@ -136,9 +186,8 @@ class Game {
 			},
 			yaxis: {
 				min: 0,
-				decimalsInFloat: 2,
 				forceNiceScale: true,
-				labels: { formatter: (value) => ("$" + value), style: { fontSize: "11px" } },
+				labels: { formatter: (value) => ("$" + helpers.format(value)), style: { fontSize: "11px" } },
 				axisBorder: { color: "#888" },
 				axisTicks: { color: "#888" },
 				crosshairs: { stroke: { color: "555" } },
@@ -163,26 +212,11 @@ class Game {
 		this.#scale = 0.2
 		this.#elements.chart.onwheel = (event) => {
 			this.#scale = Math.max(0.0001, Math.min(0.9999, this.#scale - 0.0002 * event.deltaY))
-			this.#zoom()
+			this.#zoomChart()
 		}
-		this.#elements.companies.innerHTML = ""
-		for (let i = 0; i < testData.companies.length; i++) {
-			const c = document.createElement("option")
-			c.value = i
-			c.innerHTML = testData.companies[i]
-			if (i == 0) c.selected = true
-			this.#elements.companies.appendChild(c)
-		}
-		this.#elements.portfolioTotal.innerHTML = "$0"
-		this.#elements.portfolio.innerHTML = ""
-		this.#elements.news.innerHTML = "<p><strong>NEWS</strong></p>"
-		this.#elements.sectorsAndProducts.innerHTML = ""
-		this.#epoch = Date.now()
-		this.#averages = testData.companies.map((name) => 0)
-		this.#cash = 10000
-		this.#stocks = Array.from(testData.companies, (value, index) => 0)
-		this.#g = new Generator(testData, 0.2, true)
-		this.#frequency = initialFrequency
+		this.#assets.stocks = Array(this.#data.companies.length).fill(0)
+		this.#assets.averages = Array(this.#data.companies.length).fill(0)
+		this.#g = new Generator(this.#data, 0.2, true)
 		this.#tick(false)
 	}
 
@@ -195,17 +229,17 @@ class Game {
 		if (shares == 0) return
 		const i = this.getSelectedCompany()
 		const price = this.#g.getLastPrices()[i]
-		this.#cash -= shares * price
-		this.#stocks[i] += shares
-		this.#write()
-		if (this.#averages[i] != 0) this.#chart.removeAnnotation("average-" + i)
-		if (this.#stocks[i] == 0) this.#averages[i] = 0
-		else this.#averages[i] = ((this.#stocks[i] - shares) * this.#averages[i] + shares * price) / this.#stocks[i]
-		if (this.#averages[i] != 0) this.#chart.addYaxisAnnotation({
+		this.#assets.cash -= shares * price
+		this.#assets.stocks[i] += shares
+		this.#updatePortfolio()
+		if (this.#assets.averages[i] != 0) this.#chart.removeAnnotation("average-" + i)
+		if (this.#assets.stocks[i] == 0) this.#assets.averages[i] = 0
+		else this.#assets.averages[i] = ((this.#assets.stocks[i] - shares) * this.#assets.averages[i] + shares * price) / this.#assets.stocks[i]
+		if (this.#assets.averages[i] != 0) this.#chart.addYaxisAnnotation({
 			id: "average-" + i,
-			y: this.#averages[i],
+			y: this.#assets.averages[i],
 			label: {
-				text: testData.companies[i] + " average $" + helpers.format(this.#averages[i]),
+				text: this.#g.getCompanyNames()[i] + " average $" + helpers.format(this.#assets.averages[i]),
 				textAnchor: "start",
 				position: "left",
 				borderColor: "#fff",
@@ -218,12 +252,13 @@ class Game {
 	}
 
 	close() {
-		this.transact(-this.#stocks[this.getSelectedCompany()])
+		this.transact(-this.#assets.stocks[this.getSelectedCompany()])
 	}
 }
 
 window.onload = () => {
 	game = new Game(
+		testData,
 		document.getElementById("companies"),
 		document.getElementById("chart"),
 		document.getElementById("portfolioTotal"),

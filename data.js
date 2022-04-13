@@ -1,5 +1,5 @@
 testData = {
-	companies: [ "A", "B", "C", "D", "E", "F" ],
+	companies: [ "ASDF", "BOOM", "CIKE", "DEA", "EVE", "FIN" ],
 	events: [
 		{
 			names: {
