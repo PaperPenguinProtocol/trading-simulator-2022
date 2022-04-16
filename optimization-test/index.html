@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Optimization test</title>
+		<meta name="viewport" content="width=device-width,initial-scale=1">
+		<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.0.0/dist/tf.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis@1.0.2/dist/tfjs-vis.umd.min.js"></script>
+		<script src="../simulation.js"></script>
+		<script src="../data.js"></script>
+		<script src="trainers.js"></script>
+		<link rel="stylesheet" href="../lib/normalize.css">
+		<link rel="stylesheet" href="../lib/skeleton.css">
+	</head>
+	<body>
+		<button onclick="tfvis.visor().open()">Show training visor</button>
+		<h1>Company actions without an accompanying press release</h1>
+		<div class="u-full-width">
+			<button onclick="trainers.actions.reset()">Create new model</button>
+			<input type="file" id="actionsFiles" multiple>
+			<button onclick="trainers.actions.load()">Load model from files</button>
+			<button onclick="trainers.actions.save()">Save model to files</button>
+		</div>
+		<div class="u-full-width">
+			<input type="number" min="1" max="1000" value="100" id="actionsCount">
+			<button onclick="trainers.actions.train()">Train model with new input(s)</button>
+		</div>
+	</body>
+</html>

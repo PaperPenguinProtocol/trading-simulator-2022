@@ -33,6 +33,9 @@ helpers = {
 	normalize: (value, middlePoint) => {
 		return 1 - middlePoint / (Math.abs(value) + middlePoint)
 	},
+	denormalize: (value, middlePoint) => {
+		return -middlePoint * (1 + 1 / (value - 1))
+	},
 	mergeDeep: (target, ...sources) => {
 		// https://stackoverflow.com/a/34749873
 		if (!sources.length) return target
@@ -137,8 +140,6 @@ class Genetic {
 }
 
 class Optimizer {
-	#encodeConditions
-	#encodeIndividual
 	#createConditions
 	#createIndividual
 	#zeroIndividual
@@ -148,9 +149,7 @@ class Optimizer {
 	#iterationLimit
 	#pairs
 
-	constructor(encodeConditions, encodeIndividual, createConditions, createIndividual, zeroIndividual, calculateFitness, populationSize, fitnessThreshold, iterationLimit) {
-		this.#encodeConditions = encodeConditions
-		this.#encodeIndividual = encodeIndividual
+	constructor(createConditions, createIndividual, zeroIndividual, calculateFitness, populationSize, fitnessThreshold, iterationLimit) {
 		this.#createConditions = createConditions
 		this.#createIndividual = createIndividual
 		this.#zeroIndividual = zeroIndividual
@@ -159,6 +158,10 @@ class Optimizer {
 		this.#fitnessThreshold = fitnessThreshold
 		this.#iterationLimit = iterationLimit
 		this.#pairs = []
+	}
+
+	getPairs() {
+		return this.#pairs
 	}
 
 	run() {
@@ -195,21 +198,59 @@ class Optimizer {
 			pair.individual = this.#zeroIndividual
 			pair.fitness = zeroIndividualFitness
 		}
-		this.#pairs.push([ this.#encodeConditions(pair.conditions), this.#encodeIndividual(pair.individual) ])
+		this.#pairs.push([ pair.conditions, pair.individual ])
 		return pair
 	}
+}
 
-	train(model, fitArgs) {
+class Neural {
+	#compileArgs
+	#fitArgs
+	#encodeInput
+	#encodeOutput
+	#decodeOutput
+	#runFinished
+	#model
+
+	constructor(compileArgs, fitArgs, encodeInput, encodeOutput, decodeOutput, runFinished = (pair) => {}) {
+		this.#compileArgs = compileArgs
+		this.#fitArgs = fitArgs
+		this.#encodeInput = encodeInput
+		this.#encodeOutput = encodeOutput
+		this.#decodeOutput = decodeOutput
+		this.#runFinished = runFinished
+		this.#model = null
+	}
+
+	getModel() {
+		return this.#model
+	}
+
+	setModel(model) {
+		this.#model = model
+		this.getModel().compile(this.#compileArgs)
+	}
+
+	predict(input) {
+		if (this.getModel() === null) return null
+		const encodedInput = this.#encodeInput(input)
+		return this.#decodeOutput(this.getModel().predict(tf.tensor2d(encodedInput, [1, encodedInput.length])).arraySync())
+	}
+
+	fit(count, optimizer) {
+		if (this.getModel() === null) return null
+		for (let i = 0; i < count; i++) this.#runFinished(i, optimizer.run())
+		const pairs = optimizer.getPairs()
 		const data = tf.tidy(() => {
-			tf.util.shuffle(this.#pairs)
-			const inputs = this.#pairs.map((item) => item[0])
-			const labels = this.#pairs.map((item) => item[1])
+			tf.util.shuffle(pairs)
+			const inputs = pairs.map((item) => this.#encodeInput(item[0]))
+			const outputs = pairs.map((item) => this.#encodeOutput(item[1]))
 			return {
-				inputs: tf.tensor2d(inputs, [ this.#pairs.length, inputs[0].length ]),
-				labels: tf.tensor2d(labels, [ this.#pairs.length, labels[0].length ]),
+				inputs: tf.tensor2d(inputs, [ pairs.length, inputs[0].length ]),
+				outputs: tf.tensor2d(outputs, [ pairs.length, outputs[0].length ]),
 			}
 		})
-		return model.fit(data.inputs, data.labels, fitArgs)
+		return this.getModel().fit(data.inputs, data.outputs, this.#fitArgs)
 	}
 }
 
@@ -563,7 +604,6 @@ class Generator {
 				const totalRevenue = (lastReport.totalRevenue < 10 ? 10 : lastReport.totalRevenue)
 				const demandChangeBase = sectorRevenue / totalRevenue
 				newsC += (c.changeDemand[sectorName] - 1) * Math.pow(demandChangeBase, this.#params.newsApplication.demandChangeExp)
-				if (newsC > 0) console.log()
 			}
 		}
 		return newsC
@@ -579,7 +619,7 @@ class Generator {
 	#nextFundamentals(name) {
 		const company = this.getCompanies()[name]
 		const optimalActions = this.#findOptimalActions(name)
-		for (sectorName in optimalActions) {
+		for (sectorName in optimalActions) if (sectorName in company.getDepartments()) {
 			const sector = optimalActions[sectorName]
 			const department = company.getDepartments()[sectorName]
 			if (sector.employ != 1) {
@@ -588,7 +628,7 @@ class Generator {
 			for (productName in sector.removeProducts) {
 				department.removeProduct(productName)
 			}
-			for (productName in sector.addProducts) {
+			for (let i = 0; i < sector.addProducts; i++) {
 				department.addProduct(helpers.multiply(this.#params.product.profitMultiplier) * this.#params.product.profit)
 			}
 		}
