@@ -7,28 +7,32 @@ class Game {
 	#epoch
 	#chart
 	#scale
-	#assets
+	#portfolio
+	#averages
 	#g
 
-	constructor(data, companiesEl, chartEl, portfolioTotalEl, portfolioEl, newsEl, sectorsAndProductsEl) {
+	constructor(data, elements) {
 		this.#data = data
 		this.#state = "waiting"
-		this.#elements = {
-			companies: companiesEl,
-			chart: chartEl,
-			portfolioTotal: portfolioTotalEl,
-			portfolio: portfolioEl,
-			news: newsEl,
-			sectorsAndProducts: sectorsAndProductsEl,
-		}
-		this.#assets = { cash: 10000, stocks: [], averages: [] }
-		for (let i = 0; i < this.#data.companies.length; i++) {
+		this.#elements = elements
+		this.#portfolio = new Portfolio(this.#data.companyNames)
+		this.#portfolio.addCash(10000)
+		this.#averages = Object.fromEntries(this.#data.companyNames.map((name) => [ name, 0 ]))
+		for (let i = 0; i < this.#data.companyNames.length; i++) {
 			const c = document.createElement("option")
-			c.value = i
-			c.innerHTML = this.#data.companies[i]
+			c.value = this.#data.companyNames[i]
+			c.innerHTML = this.#data.companyNames[i]
 			if (i == 0) c.selected = true
 			this.#elements.companies.appendChild(c)
 		}
+		this.#frequency = Math.pow(10, this.#elements.frequency.value)
+		this.#elements.frequency.oninput = (event) => {
+			this.#frequency = Math.pow(10, event.target.value)
+		}
+	}
+
+	getTotalAssetValue() {
+		return this.#portfolio.getTotalAssetValue(this.#g.getLastPrices())
 	}
 
 	#timestamp() {
@@ -45,34 +49,37 @@ class Game {
 	}
 
 	#resetPortfolioTotal() {
-		this.#elements.portfolioTotal.innerHTML = "$" + helpers.format(this.#assets.cash)
+		this.#elements.portfolioTotal.innerHTML = "$" + helpers.format(this.getTotalAssetValue())
 	}
 
-	#updatePortfolio() {
-		let rows = []
-		const lastPrices = this.#g.getLastPrices()
-		let totalValue = this.#assets.cash
-		for (let i = 0; i < this.#g.getCompanyNames().length; i++) {
-			const v = this.#assets.stocks[i] * lastPrices[i]
-			totalValue += v
-			rows.push([ this.#g.getCompanyNames()[i], lastPrices[i], this.#assets.stocks[i], v ])
-		}
-		rows.push([ "Cash", "", "", this.#assets.cash ])
-		this.#elements.portfolioTotal.innerHTML = "$" + helpers.format(totalValue)
-		this.#resetPortfolio()
+	#addRowsToPortfolio(rows, stocks = false) {
 		for (let i = 0; i < rows.length; i++) {
 			const rowEl = document.createElement("tr")
 			for (let j = 0; j < 4; j++) {
 				const cellEl = document.createElement("td")
-				cellEl.innerHTML = ((j == 1 && i < rows.length - 1) || j == 3 ? "$" + helpers.format(rows[i][j]) : rows[i][j])
-				if (j == 1 && i < rows.length - 1) {
-					const previousPrice = (this.#g.getTick() == 0 ? rows[i][j] : this.#g.getPriceHistory(i).at(-2))
+				cellEl.innerHTML = ((j == 1 && rows[i][j] != "") || j == 3 ? "$" + helpers.format(rows[i][j]) : rows[i][j])
+				if (stocks && j == 1) {
+					const previousPrice = (this.#g.getTick() == 0 ? rows[i][j] : this.#g.getCompanies()[rows[i][0]].getPriceHistory().at(-2))
 					cellEl.classList.add(previousPrice == rows[i][j] ? "primary" : (previousPrice < rows[i][j] ? "success" : "danger"))
 				}
 				rowEl.appendChild(cellEl)
 			}
 			this.#elements.portfolio.appendChild(rowEl)
 		}
+	}
+
+	#updatePortfolio() {
+		this.#elements.portfolioTotal.innerHTML = "$" + helpers.format(this.getTotalAssetValue())
+		let stockRows = []
+		const lastPrices = this.#g.getLastPrices()
+		for (const name in this.#g.getCompanies()) {
+			const shares = this.#portfolio.getStocks()[name]
+			stockRows.push([ name, lastPrices[name], shares, lastPrices[name] * shares ])
+		}
+		let otherRows = [ [ "Cash", "", "", this.#portfolio.getCash() ] ]
+		this.#resetPortfolio()
+		this.#addRowsToPortfolio(stockRows, true)
+		this.#addRowsToPortfolio(otherRows)
 	}
 
 	#resetNews() {
@@ -105,24 +112,20 @@ class Game {
 
 	#updateSectorsAndProducts() {
 		this.#elements.sectorsAndProducts.innerHTML = "<p><strong>SECTORS (PRODUCTS)</strong></p>"
-		for (let i = 0; i < this.#g.getCompanyNames().length; i++) {
-			const sap = this.#g.getSectorsAndProducts(i)
+		for (name in this.#g.getCompanies()) {
+			const departments = this.#g.getCompanies()[name].getDepartments()
 			const sapStrings = []
-			for (const sectorName in sap) {
-				let s = " " + sectorName
-				if (sap[sectorName].length > 0) {
-					s += " ("
-					const minorCount = sap[sectorName].filter((product) => (product < 100000)).length
-					const majorCount = sap[sectorName].length - minorCount
-					if (minorCount > 0) s += minorCount + " minor"
-					if (minorCount > 0 && majorCount > 0) s += ", "
-					if (majorCount > 0) s += majorCount + " major"
-					s += ")"
-				}
+			for (const sectorName in departments) {
+				const announcedProducts = Object.values(departments[sectorName].getProducts(true))
+				const developedCount = announcedProducts.filter((product) => (product.progress == 1)).length
+				const undevelopedCount = announcedProducts.length - developedCount
+				let s = " " + sectorName + " (" + developedCount + " in production"
+				if (undevelopedCount > 0) s += " and " + undevelopedCount + " announced"
+				s += ")"
 				sapStrings.push(s)
 			}
 			const sapP = document.createElement("p")
-			sapP.innerHTML = "<strong>" + this.#g.getCompanyNames()[i] + "</strong>" + (sapStrings.length > 0 ? ":" : "") + sapStrings.join(",")
+			sapP.innerHTML = "<strong>" + name + "</strong>:" + sapStrings.join(",")
 			this.#elements.sectorsAndProducts.appendChild(sapP)
 		}
 	}
@@ -132,14 +135,16 @@ class Game {
 	}
 
 	#updateChart() {
-		this.#chart.appendData(this.#g.getLastPrices().map((price) => ({
-			data: [ [ this.#timestamp(), Math.round(price * 100) / 100 ] ],
+		this.#chart.appendData(Object.entries(this.#g.getLastPrices()).map((price) => ({
+			name: price[0],
+			data: [ [ this.#timestamp(), Math.round(price[1] * 100) / 100 ] ],
 		})))
 		this.#zoomChart()
 	}
 
 	#tick(next = true) {
 		if (next) this.#g.next()
+		if (this.#portfolio.getCash() < 0) this.#portfolio.applyInterestRate(this.#g.getInterestRate())
 		this.#updatePortfolio()
 		this.#updateNews()
 		this.#updateSectorsAndProducts()
@@ -160,7 +165,6 @@ class Game {
 	start(initialFrequency = 1000) {
 		if (this.#state == "playing") this.stop()
 		this.#state = "playing"
-		this.#frequency = initialFrequency
 		this.#epoch = Date.now()
 		this.#resetNews()
 		this.#chart = new ApexCharts(this.#elements.chart, {
@@ -174,8 +178,8 @@ class Game {
 				background: "transparent",
 				foreColor: "#fff",
 			},
-			series: this.#data.companies.map((name, index) => ({
-				name,
+			series: this.#data.companyNames.map((company) => ({
+				name: company,
 				data: [],
 			})),
 			xaxis: {
@@ -214,32 +218,32 @@ class Game {
 			this.#scale = Math.max(0.0001, Math.min(0.9999, this.#scale - 0.0002 * event.deltaY))
 			this.#zoomChart()
 		}
-		this.#assets.stocks = Array(this.#data.companies.length).fill(0)
-		this.#assets.averages = Array(this.#data.companies.length).fill(0)
-		this.#g = new Generator(this.#data, 0.2, true)
+		this.#portfolio = new Portfolio(this.#data.companyNames)
+		this.#portfolio.addCash(10000)
+		this.#averages = Object.fromEntries(this.#data.companyNames.map((name) => [ name, 0 ]))
+		this.#g = new Generator(this.#data, { initial: { priceAmplitude: 0 }, macro: { newsProbability: 0.2 } })
 		this.#tick(false)
 	}
 
 	getSelectedCompany() {
 		const select = this.#elements.companies
-		return parseInt(select.options[select.selectedIndex].value)
+		return select.options[select.selectedIndex].value
 	}
 
 	transact(shares) {
 		if (shares == 0) return
-		const i = this.getSelectedCompany()
-		const price = this.#g.getLastPrices()[i]
-		this.#assets.cash -= shares * price
-		this.#assets.stocks[i] += shares
+		const name = this.getSelectedCompany()
+		const price = this.#g.getLastPrices()[name]
+		this.#portfolio.transactStock(name, shares, price)
 		this.#updatePortfolio()
-		if (this.#assets.averages[i] != 0) this.#chart.removeAnnotation("average-" + i)
-		if (this.#assets.stocks[i] == 0) this.#assets.averages[i] = 0
-		else this.#assets.averages[i] = ((this.#assets.stocks[i] - shares) * this.#assets.averages[i] + shares * price) / this.#assets.stocks[i]
-		if (this.#assets.averages[i] != 0) this.#chart.addYaxisAnnotation({
-			id: "average-" + i,
-			y: this.#assets.averages[i],
+		if (this.#averages[name] != 0) this.#chart.removeAnnotation("average-" + name)
+		if (this.#portfolio.getStocks()[name] == 0) this.#averages[name] = 0
+		else this.#averages[name] = ((this.#portfolio.getStocks()[name] - shares) * this.#averages[name] + shares * price) / this.#portfolio.getStocks()[name]
+		if (this.#averages[name] != 0) this.#chart.addYaxisAnnotation({
+			id: "average-" + name,
+			y: this.#averages[name],
 			label: {
-				text: this.#g.getCompanyNames()[i] + " average $" + helpers.format(this.#assets.averages[i]),
+				text: name + " average $" + helpers.format(this.#averages[name]),
 				textAnchor: "start",
 				position: "left",
 				borderColor: "#fff",
@@ -252,18 +256,21 @@ class Game {
 	}
 
 	close() {
-		this.transact(-this.#assets.stocks[this.getSelectedCompany()])
+		this.transact(-this.#portfolio.getStocks()[this.getSelectedCompany()])
 	}
 }
 
 window.onload = () => {
 	game = new Game(
 		testData,
-		document.getElementById("companies"),
-		document.getElementById("chart"),
-		document.getElementById("portfolioTotal"),
-		document.getElementById("portfolio"),
-		document.getElementById("news"),
-		document.getElementById("sectorsAndProducts"),
+		{
+			frequency: document.getElementById("frequency"),
+			companies: document.getElementById("companies"),
+			chart: document.getElementById("chart"),
+			portfolioTotal: document.getElementById("portfolioTotal"),
+			portfolio: document.getElementById("portfolio"),
+			news: document.getElementById("news"),
+			sectorsAndProducts: document.getElementById("sectorsAndProducts"),
+		},
 	)
 }

@@ -6,15 +6,15 @@ output = {
 		if (output.chart && "destroy" in output.chart) output.chart.destroy()
 		document.getElementById("news").innerHTML = ""
 		output.totalDaysCount = 0
-		output.g = new Generator(testData, 0.2, true)
+		output.g = new Generator(testData, { initial: { priceAmplitude: 0 }, macro: { newsProbability: 0.2 } })
 		output.chart = new ApexCharts(document.getElementById("chart"), {
 			chart: {
 				type: "line",
 				height: "100%",
 				animations: { enabled: false },
 			},
-			series: output.g.getCompanyNames().map((name, index) => ({
-				name,
+			series: Object.entries(output.g.getCompanies()).map((company) => ({
+				name: company[0],
 				data: [],
 			})),
 			xaxis: {
@@ -38,15 +38,15 @@ output = {
 			colors: [ "#f06033", "#f0bf33", "#64f033", "#33c3f0", "#6033f0", "#f033c3" ],
 		})
 		output.chart.render()
+		console.log("Initial departments: " + Object.entries(output.g.getCompanies()).map((company) => company[0] + " (" + Object.keys(company[1].getDepartments()).join(", ") + ")").join(", "))
 	},
 	add: (daysCount) => {
-		let historicalPrices = new Array(output.g.getCompanyNames().length)
-		for (let i = 0; i < output.g.getCompanyNames().length; i++) historicalPrices[i] = []
+		let historicalPrices = Object.fromEntries(Object.entries(output.g.getCompanies()).map((company) => [ company[0], [] ]))
 		for (let i = 0; i < daysCount; i++) {
 			const dayId = output.totalDaysCount + i
 			const results = output.g.next()
-			for (let j = 0; j < output.g.getCompanyNames().length; j++) {
-				historicalPrices[j].push([ dayId * 1000 * 60 * 60 * 24, Math.round(results.prices[j] * 100) / 100 ])
+			for (name in output.g.getCompanies()) {
+				historicalPrices[name].push([ dayId * 1000 * 60 * 60 * 24, Math.round(results.prices[name] * 100) / 100 ])
 			}
 			if (results.news) {
 				const newsP = document.createElement("p")
@@ -55,8 +55,9 @@ output = {
 				document.getElementById("news").appendChild(newsP)
 			}
 		}
-		output.chart.appendData(historicalPrices.map((prices) => ({
-			data: prices,
+		output.chart.appendData(Object.entries(historicalPrices).map((prices) => ({
+			name: prices[0],
+			data: prices[1],
 		})))
 		output.totalDaysCount += daysCount
 	},
